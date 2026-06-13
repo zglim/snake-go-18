@@ -3,9 +3,6 @@ package trisnake
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
-	"os"
-	"time"
 
 	tl "github.com/JoelOtter/termloop"
 )
@@ -47,6 +44,7 @@ func NewTitleScreen() *Titlescreen {
 	ts.OptionsText = []*tl.Text{
 		tl.NewText(10, 15, "Press ENTER to start!", tl.ColorWhite, tl.ColorBlack),
 		tl.NewText(10, 17, "Press INSERT for options!", tl.ColorWhite, tl.ColorBlack),
+		tl.NewText(10, 19, "Press H for High Scores!", tl.ColorWhite, tl.ColorBlack),
 	}
 
 	return ts
@@ -62,7 +60,7 @@ func NewOptionsscreen() *Gameoptionsscreen {
 	gop.DifficultyBackground = tl.NewRectangle(5, 3, 33, 10, tl.ColorWhite)
 	gop.ObjectBackground = tl.NewRectangle(5, 15, 33, 9, tl.ColorWhite)
 
-	gop.StartText = tl.NewText(2, 1, "Press Enter to start!", tl.ColorWhite, tl.ColorBlack)
+	gop.StartText = tl.NewText(2, 1, "Press Enter to start!  Press H for High Scores!", tl.ColorWhite, tl.ColorBlack)
 	gop.CurrentDifficultyText = tl.NewText(6, 4, fmt.Sprintf("Current difficulty: %s", Difficulty), tl.ColorBlack, tl.ColorWhite)
 	gop.CurrentColorObjectText = tl.NewText(44, 4, fmt.Sprintf("Current Object: %s", ColorObject), tl.ColorBlack, tl.ColorWhite)
 	gop.ColorSelectedIcon = tl.NewText(73, 10, "■", tl.ColorBlack, tl.ColorWhite)
@@ -192,12 +190,14 @@ func Gameover() {
 		tl.NewText(10, 15, fmt.Sprintf("Speed: %.0f", gs.FPS), tl.ColorWhite, tl.ColorBlack),
 		tl.NewText(10, 17, fmt.Sprintf("Difficulty: %s", Difficulty), tl.ColorWhite, tl.ColorBlack),
 	}
-	gos.OptionsBackground = tl.NewRectangle(45, 12, 45, 7, tl.ColorWhite)
+	gos.OptionsBackground = tl.NewRectangle(45, 12, 45, 9, tl.ColorWhite)
 	gos.OptionsText = []*tl.Text{
 		tl.NewText(47, 13, "Press \"Home\" to restart!", tl.ColorBlack, tl.ColorWhite),
 		tl.NewText(47, 15, "Press \"Delete\" to quit!", tl.ColorBlack, tl.ColorWhite),
 		tl.NewText(47, 17, "Press \"Spacebar\" to save your score!", tl.ColorBlack, tl.ColorWhite),
+		tl.NewText(47, 19, "Press \"H\" for High Scores!", tl.ColorBlack, tl.ColorWhite),
 	}
+	gos.SavedNotice = tl.NewText(10, 20, "", tl.ColorGreen, tl.ColorBlack)
 
 	// Add all of the entities to the screen
 	for _, v := range gos.Finalstats {
@@ -205,6 +205,7 @@ func Gameover() {
 	}
 	gos.AddEntity(gos.Logo)
 	gos.AddEntity(gos.OptionsBackground)
+	gos.AddEntity(gos.SavedNotice)
 
 	for _, vv := range gos.OptionsText {
 		gos.AddEntity(vv)
@@ -263,18 +264,47 @@ func SetDiffiultyFPS() {
 }
 
 func SaveHighScore(score int, speed float64, difficulty string) {
-	var newRow []byte
-	datetime := time.Now()
-	newRow = []byte(fmt.Sprintf("\n|" + fmt.Sprintf("%s", datetime.Format("01-02-2006 15:04:05")) + "|" + fmt.Sprintf("%d", score) + "|" + fmt.Sprintf("%.0f", speed) + "|" + difficulty + "|  "))
-	f, err := os.OpenFile("HIGHSCORES.md", os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatalf("Error opening file: %s", err)
+	if err := SaveHighScoreEntry(score, speed, difficulty); err != nil {
+		// Graceful: log but don't crash. The game over screen will show a notice.
+		return
+	}
+}
+
+// NewHighScoresScreen creates and returns the high scores display screen.
+func NewHighScoresScreen() *Highscoresscreen {
+	hss := new(Highscoresscreen)
+	hss.Level = tl.NewBaseLevel(tl.Cell{
+		Bg: tl.ColorBlack,
+	})
+
+	hss.TitleText = tl.NewText(10, 2, "=== HIGH SCORES ===", tl.ColorYellow, tl.ColorBlack)
+
+	hss.Background = tl.NewRectangle(8, 4, 70, 18, tl.ColorWhite)
+
+	entries := LoadHighScores()
+	displayLines := FormatHighScores(entries, 15)
+
+	hss.EntriesText = make([]*tl.Text, 0, len(displayLines))
+	y := 5
+	for _, line := range displayLines {
+		t := tl.NewText(10, y, line, tl.ColorBlack, tl.ColorWhite)
+		hss.EntriesText = append(hss.EntriesText, t)
+		y += 1
 	}
 
-	_, err2 := f.Write(newRow)
-	if err2 != nil {
-		log.Fatalf("Error writing to file: %s", err2)
+	hss.OptionsText = []*tl.Text{
+		tl.NewText(10, 23, "Press \"Home\" to go back to title  |  Press \"Delete\" to quit", tl.ColorWhite, tl.ColorBlack),
 	}
 
-	f.Close()
+	// Add entities.
+	hss.AddEntity(hss.Background)
+	hss.AddEntity(hss.TitleText)
+	for _, t := range hss.EntriesText {
+		hss.AddEntity(t)
+	}
+	for _, t := range hss.OptionsText {
+		hss.AddEntity(t)
+	}
+
+	return hss
 }

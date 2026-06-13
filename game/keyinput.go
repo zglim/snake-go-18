@@ -52,21 +52,25 @@ func (gos *Gameoverscreen) Tick(event tl.Event) {
 	// Check if the event is a key event.
 	if event.Type == tl.EventKey {
 		switch event.Key {
-		// If the key pressed is backspace the game will restart!!
+		// If the key pressed is Home the game will restart.
 		case tl.KeyHome:
-			// Will call the RestartGame function to restart the game.
 			RestartGame()
 		case tl.KeyDelete:
-			// Will end the game using a fatal log. This uses the termbox package as termloop does not have a function like that.
 			tb.Close()
 		case tl.KeySpace:
 			SaveHighScore(gs.Score, gs.FPS, Difficulty)
+			gos.SavedNotice.SetText("Score saved!")
+		}
+		// 'h' or 'H' opens the high scores screen.
+		if event.Ch == 'h' || event.Ch == 'H' {
+			hss := NewHighScoresScreen()
+			sg.Screen().SetLevel(hss)
 		}
 	}
 }
 
-// Tick will listen for a keypress to initiate the game.
-func (ts *Titlescreen) Tick(event tl.Event) {
+// Tick will listen for a keypress to initiate the game or open high scores.
+func (titlescreen *Titlescreen) Tick(event tl.Event) {
 	// Checks if the event is a keypress event and the key pressed is the enter key.
 	if event.Type == tl.EventKey {
 		if event.Key == tl.KeyEnter {
@@ -77,10 +81,15 @@ func (ts *Titlescreen) Tick(event tl.Event) {
 			gop := NewOptionsscreen()
 			sg.Screen().SetLevel(gop)
 		}
+		// 'h' or 'H' opens the high scores screen.
+		if event.Ch == 'h' || event.Ch == 'H' {
+			hss := NewHighScoresScreen()
+			sg.Screen().SetLevel(hss)
+		}
 	}
 }
 
-// Tick will listen for a keypress to initiate the game.
+// Tick will listen for a keypress to initiate the game or navigate.
 func (g *Gameoptionsscreen) Tick(event tl.Event) {
 	// Checks if the event is a keypress event.
 	if event.Type == tl.EventKey {
@@ -149,6 +158,29 @@ func (g *Gameoptionsscreen) Tick(event tl.Event) {
 		case tl.KeyEnter:
 			gs = NewGamescreen()
 			sg.Screen().SetLevel(gs)
+		}
+		// 'h' or 'H' opens the high scores screen.
+		if event.Ch == 'h' || event.Ch == 'H' {
+			hss := NewHighScoresScreen()
+			sg.Screen().SetLevel(hss)
+		}
+	}
+}
+
+// Tick handles key input on the high scores screen.
+func (hss *Highscoresscreen) Tick(event tl.Event) {
+	if event.Type == tl.EventKey {
+		switch event.Key {
+		case tl.KeyHome:
+			// Go back to the title screen.
+			newTS := NewTitleScreen()
+			newTS.AddEntity(newTS.Logo)
+			for _, v := range newTS.OptionsText {
+				newTS.AddEntity(v)
+			}
+			sg.Screen().SetLevel(newTS)
+		case tl.KeyDelete:
+			tb.Close()
 		}
 	}
 }

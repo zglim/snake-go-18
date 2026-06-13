@@ -50,6 +50,22 @@ type Gameoverscreen struct {
 	Finalstats        []*tl.Text
 	OptionsBackground *tl.Rectangle
 	OptionsText       []*tl.Text
+	SavedNotice       *tl.Text
+}
+
+type Highscoresscreen struct {
+	tl.Level
+	TitleText    *tl.Text
+	EntriesText  []*tl.Text
+	OptionsText  []*tl.Text
+	Background   *tl.Rectangle
+}
+
+type HighScoreEntry struct {
+	Date       string
+	Score      int
+	Speed      float64
+	Difficulty string
 }
 
 type Gameoptionsscreen struct {
