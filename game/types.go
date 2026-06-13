@@ -2,83 +2,161 @@ package trisnake
 
 import tl "github.com/JoelOtter/termloop"
 
-//Game Object Variables.
-var sg *tl.Game
-var sp *Sidepanel
-var gs *Gamescreen
-var ts *Titlescreen
-var gop *Gameoptionsscreen
-
-// Own created types.
-type direction int
-type difficulty int
-type colorobject int
-
-// Game options
-var Difficulty = "Normal"
-var ColorObject = "Snake"
+// Direction represents the movement direction of the snake.
+type Direction int
 
 const (
-	easy difficulty = iota
-	normal
-	hard
+	DirUp Direction = iota
+	DirDown
+	DirLeft
+	DirRight
 )
+
+// Difficulty represents the game difficulty level.
+type Difficulty int
 
 const (
-	snake colorobject = iota
-	food
-	arena
+	DiffEasy Difficulty = iota
+	DiffNormal
+	DiffHard
 )
+
+// String returns the display name of the difficulty.
+func (d Difficulty) String() string {
+	switch d {
+	case DiffEasy:
+		return "Easy"
+	case DiffNormal:
+		return "Normal"
+	case DiffHard:
+		return "Hard"
+	default:
+		return "Normal"
+	}
+}
+
+// baseFPS returns the starting FPS for the given difficulty.
+func (d Difficulty) baseFPS() float64 {
+	switch d {
+	case DiffEasy:
+		return 8
+	case DiffNormal:
+		return 12
+	case DiffHard:
+		return 25
+	default:
+		return 12
+	}
+}
+
+// ColorTarget selects which game element's color is being configured.
+type ColorTarget int
 
 const (
-	up direction = iota
-	down
-	left
-	right
+	TargetSnake ColorTarget = iota
+	TargetArena
 )
 
-type Titlescreen struct {
-	tl.Level
-	Logo           *tl.Entity
-	GameDifficulty difficulty
-	OptionsText    []*tl.Text
+// String returns the display name of the color target.
+func (ct ColorTarget) String() string {
+	switch ct {
+	case TargetSnake:
+		return "Snake"
+	case TargetArena:
+		return "Arena"
+	default:
+		return "Snake"
+	}
 }
 
-type Gameoverscreen struct {
-	tl.Level
-	Logo              *tl.Entity
-	Finalstats        []*tl.Text
-	OptionsBackground *tl.Rectangle
-	OptionsText       []*tl.Text
+// colorIndex maps a numeric selector position to a termloop color attribute.
+func colorIndex(idx int) tl.Attr {
+	switch idx {
+	case 10:
+		return tl.ColorWhite
+	case 12:
+		return tl.ColorRed
+	case 14:
+		return tl.ColorGreen
+	case 16:
+		return tl.ColorBlue
+	case 18:
+		return tl.ColorYellow
+	case 20:
+		return tl.ColorMagenta
+	case 22:
+		return tl.ColorCyan
+	default:
+		return tl.ColorDefault
+	}
 }
 
-type Gameoptionsscreen struct {
-	tl.Level
-	StartText *tl.Text
-
-	CurrentColorObjectText *tl.Text
-	ObjectBackground       *tl.Rectangle
-	ColorObjectOptions     []*tl.Text
-
-	CurrentDifficultyText *tl.Text
-	DifficultyBackground  *tl.Rectangle
-	DifficultyOptions     []*tl.Text
-
-	ColorPanelBackground *tl.Rectangle
-	ColorPanelOptions    []string
-	ColorSelectedIcon    *tl.Text
+// Coordinates represents an (X, Y) position on the game grid.
+type Coordinates struct {
+	X int
+	Y int
 }
 
-type Gamescreen struct {
-	tl.Level
-	FPS             float64
-	Score           int
-	SnakeEntity     *Snake
-	FoodEntity      *Food
-	ArenaEntity     *Arena
-	SidepanelObject *Sidepanel
+// GameState holds all mutable runtime state for an active game round.
+// It is reset each time a new game round starts.
+type GameState struct {
+	score    int
+	fps      float64
+	snake    *Snake
+	food     *Food
+	arena    *Arena
+	sidepanel *Sidepanel
 }
 
+// ColorConfig holds the color selection state shared across screens.
+type ColorConfig struct {
+	Target    ColorTarget
+	SnakeIdx  int
+	ArenaIdx  int
+}
+
+// ActiveColorIdx returns the selector index for the currently targeted element.
+func (cc *ColorConfig) ActiveIdx() int {
+	if cc.Target == TargetArena {
+		return cc.ArenaIdx
+	}
+	return cc.SnakeIdx
+}
+
+// SetActiveIdx sets the selector index for the currently targeted element.
+func (cc *ColorConfig) SetActiveIdx(idx int) {
+	if cc.Target == TargetArena {
+		cc.ArenaIdx = idx
+	} else {
+		cc.SnakeIdx = idx
+	}
+}
+
+// Snake is the player-controlled entity that moves on the game grid.
+type Snake struct {
+	*tl.Entity
+	game      *Game
+	Direction Direction
+	Body      []Coordinates
+}
+
+// Food is a collectible item that spawns at random positions inside the arena.
+type Food struct {
+	*tl.Entity
+	Position Coordinates
+	Emoji    rune
+}
+
+// Arena defines the play area and its border walls.
+type Arena struct {
+	*tl.Entity
+	game   *Game
+	Width  int
+	Height int
+	Border map[Coordinates]int
+}
+
+// Sidepanel displays score, speed and instructions next to the arena.
 type Sidepanel struct {
 	Background     *tl.Rectangle
 	Instructions   []string
@@ -87,28 +165,45 @@ type Sidepanel struct {
 	DifficultyText *tl.Text
 }
 
-type Arena struct {
-	*tl.Entity
-	Width       int
-	Height      int
-	ArenaBorder map[Coordinates]int
+// TitleScreen is the initial screen shown when the game starts.
+type TitleScreen struct {
+	tl.Level
+	game *Game
+	logo *tl.Entity
+	options []*tl.Text
 }
 
-type Snake struct {
-	*tl.Entity
-	Direction  direction
-	Length     int
-	Bodylength []Coordinates
-	Speed      int
+// OptionsScreen allows the player to configure difficulty and colors.
+type OptionsScreen struct {
+	tl.Level
+	game *Game
+
+	startText             *tl.Text
+	difficultyLabel       *tl.Text
+	difficultyBackground  *tl.Rectangle
+	difficultyOptions     []*tl.Text
+
+	colorLabel            *tl.Text
+	objectBackground      *tl.Rectangle
+	colorObjectOptions    []*tl.Text
+
+	colorPanelBackground  *tl.Rectangle
+	colorPanelOptions     []string
+	colorSelectedIcon     *tl.Text
 }
 
-type Food struct {
-	*tl.Entity
-	Foodposition Coordinates
-	Emoji        rune
+// GameScreen is the main play area level where the snake game runs.
+type GameScreen struct {
+	tl.Level
+	game *Game
 }
 
-type Coordinates struct {
-	X int
-	Y int
+// GameOverScreen shows the final stats and restart/quit options.
+type GameOverScreen struct {
+	tl.Level
+	game              *Game
+	logo              *tl.Entity
+	finalStats        []*tl.Text
+	optionsBackground *tl.Rectangle
+	optionsText       []*tl.Text
 }

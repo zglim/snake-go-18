@@ -7,76 +7,56 @@ import (
 	tl "github.com/JoelOtter/termloop"
 )
 
-// Variable insideborderW and insideborderH are variables consisting of the arenawidth and height and subtract both with 1
-// in order to account for the arena border.
-var insideborderW = 70 - 1
-var insideborderH = 25 - 1
+// foodEmojis defines the weighted pool of possible food types.
+var foodEmojis = []rune{
+	'R',   // Reward: 5 points + speed boost
+	'■', '■', '■', '■', '■', '■', '■', '■', '■', '■', // Normal: 1 point + grow
+	'S', // Speed penalty
+}
 
-// NewFood will create a new piece of food, this will only happen once when the game has started.
-func NewFood() *Food {
-	food := new(Food)
-	// Create a new entity food with a standard position and 1x1 size
-	food.Entity = tl.NewEntity(1, 1, 1, 1)
-	// Call function MoveFood to move the food to a random position.
-	food.MoveFood()
+// insideBorderW and insideBorderH define the playable area bounds (excluding border).
+const (
+	insideBorderW = arenaWidth - 1
+	insideBorderH = arenaHeight - 1
+)
 
+// newFood creates a new food item at a random position inside the arena.
+func newFood() *Food {
+	food := &Food{
+		Entity: tl.NewEntity(1, 1, 1, 1),
+	}
+	food.Randomize()
 	return food
 }
 
-// MoveFood moves the food into a new random position.
-func (food *Food) MoveFood() {
-
-	// Calls the RandomInsideArena function to make sure that the foods spawns inside the arena.
-	NewX := RandomInsideArena(insideborderW, 1)
-	NewY := RandomInsideArena(insideborderH, 1)
-
-	// Changes the X and Y coordinates of the food.
-	food.Foodposition.X = NewX
-	food.Foodposition.Y = NewY
-	food.Emoji = RandomFood()
-
-	// Set the new position of the food.
-	food.SetPosition(food.Foodposition.X, food.Foodposition.Y)
+// Randomize repositions the food to a new random location with a random emoji.
+func (food *Food) Randomize() {
+	food.Position.X = randIntRange(1, insideBorderW)
+	food.Position.Y = randIntRange(1, insideBorderH)
+	food.Emoji = randomFoodEmoji()
+	food.SetPosition(food.Position.X, food.Position.Y)
 }
 
-// RandomFood will use the ASCII-charset to pick a random rune from the slice and print it out as food.
-func RandomFood() rune {
-	// This slice contains all of the possible food icons.
-	emoji := []rune{
-		'R', // Favourite dish, extra points!!!
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'■', // 1 point
-		'S', // You do not want to eat the skull
-	}
-
-	rand.Seed(time.Now().UnixNano())
-
-	// Return a random rune picked from the slice
-	return emoji[rand.Intn(len(emoji))]
-}
-
-// Draw will print out the food on the screen.
+// Draw renders the food on the screen.
 func (food *Food) Draw(screen *tl.Screen) {
-	screen.RenderCell(food.Foodposition.X, food.Foodposition.Y, &tl.Cell{
+	screen.RenderCell(food.Position.X, food.Position.Y, &tl.Cell{
 		Ch: food.Emoji,
 	})
 }
 
-// Contains checks if food contains the coordinates, if so this will return a bool.
+// Contains returns true if the given coordinates match the food position.
 func (food *Food) Contains(c Coordinates) bool {
-	return c.X == food.Foodposition.X && c.Y == food.Foodposition.Y
+	return c == food.Position
 }
 
-// RandomInsideArena will the minimal, which is just inside the border and the maximal, being the arena width or height.
-func RandomInsideArena(iMax int, iMin int) int {
+// randomFoodEmoji picks a random food type from the weighted pool.
+func randomFoodEmoji() rune {
 	rand.Seed(time.Now().UnixNano())
-	return rand.Intn(iMax-iMin) + iMin
+	return foodEmojis[rand.Intn(len(foodEmojis))]
+}
+
+// randIntRange returns a random int in [min, max).
+func randIntRange(min, max int) int {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Intn(max-min) + min
 }
