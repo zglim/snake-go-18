@@ -2,8 +2,6 @@ package trisnake
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"time"
 
@@ -40,7 +38,7 @@ func NewTitleScreen() *Titlescreen {
 		Bg: tl.ColorBlack,
 	})
 
-	logofile, _ := ioutil.ReadFile("util/titlescreen-logo.txt")
+	logofile, _ := os.ReadFile("util/titlescreen-logo.txt")
 	ts.Logo = tl.NewEntityFromCanvas(10, 3, tl.CanvasFromString(string(logofile)))
 
 	ts.GameDifficulty = normal
@@ -132,7 +130,7 @@ func NewGamescreen() *Gamescreen {
 	gs.Score = 0
 	gs.SnakeEntity = NewSnake()
 	gs.ArenaEntity = NewArena(70, 25)
-	gs.FoodEntity = NewFood()
+	gs.FoodEntity = NewFood(gs.SnakeEntity.Bodylength)
 	gs.SidepanelObject = NewSidepanel()
 
 	// Add entities for the game level.
@@ -185,7 +183,7 @@ func Gameover() {
 	gos.Level = tl.NewBaseLevel(tl.Cell{
 		Bg: tl.ColorBlack,
 	})
-	logofile, _ := ioutil.ReadFile("util/gameover-logo.txt")
+	logofile, _ := os.ReadFile("util/gameover-logo.txt")
 	gos.Logo = tl.NewEntityFromCanvas(10, 3, tl.CanvasFromString(string(logofile)))
 	gos.Finalstats = []*tl.Text{
 		tl.NewText(10, 13, fmt.Sprintf("Score: %d", gs.Score), tl.ColorWhite, tl.ColorBlack),
@@ -234,7 +232,7 @@ func RestartGame() {
 
 	// Generate a new snake and food.
 	gs.SnakeEntity = NewSnake()
-	gs.FoodEntity = NewFood()
+	gs.FoodEntity = NewFood(gs.SnakeEntity.Bodylength)
 
 	// Revert the score and fps to the standard.
 	SetDiffiultyFPS()
@@ -262,19 +260,23 @@ func SetDiffiultyFPS() {
 	}
 }
 
-func SaveHighScore(score int, speed float64, difficulty string) {
-	var newRow []byte
+func SaveHighScore(score int, speed float64, difficulty string) error {
 	datetime := time.Now()
-	newRow = []byte(fmt.Sprintf("\n|" + fmt.Sprintf("%s", datetime.Format("01-02-2006 15:04:05")) + "|" + fmt.Sprintf("%d", score) + "|" + fmt.Sprintf("%.0f", speed) + "|" + difficulty + "|  "))
-	f, err := os.OpenFile("HIGHSCORES.md", os.O_APPEND|os.O_WRONLY, 0644)
+	newRow := []byte(fmt.Sprintf("\n|%s|%d|%.0f|%s|  ",
+		datetime.Format("01-02-2006 15:04:05"), score, speed, difficulty))
+
+	// Try to open the file for appending; create it if it doesn't exist.
+	f, err := os.OpenFile("HIGHSCORES.md", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		log.Fatalf("Error opening file: %s", err)
+		// File couldn't be opened/created (e.g. permission denied, read-only FS).
+		// Don't crash the game — just return the error so the caller can decide.
+		return fmt.Errorf("could not open HIGHSCORES.md: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := f.Write(newRow); err != nil {
+		return fmt.Errorf("could not write to HIGHSCORES.md: %w", err)
 	}
 
-	_, err2 := f.Write(newRow)
-	if err2 != nil {
-		log.Fatalf("Error writing to file: %s", err2)
-	}
-
-	f.Close()
+	return nil
 }

@@ -115,7 +115,7 @@ func (snake *Snake) Draw(screen *tl.Screen) {
 			snake.Bodylength = append(snake.Bodylength, nHead)
 		}
 		// If there is a food collision the food it will call the MoveFood function to move the food
-		gs.FoodEntity.MoveFood()
+		gs.FoodEntity.MoveFood(snake.Bodylength)
 	} else {
 		// If there is no collision with food the snake will add the new head but exclude the tail from the body
 		// keeping the snake the same size as before.
