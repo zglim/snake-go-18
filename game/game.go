@@ -2,8 +2,6 @@ package trisnake
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"time"
 
@@ -40,7 +38,7 @@ func NewTitleScreen() *Titlescreen {
 		Bg: tl.ColorBlack,
 	})
 
-	logofile, _ := ioutil.ReadFile("util/titlescreen-logo.txt")
+	logofile, _ := os.ReadFile("util/titlescreen-logo.txt")
 	ts.Logo = tl.NewEntityFromCanvas(10, 3, tl.CanvasFromString(string(logofile)))
 
 	ts.GameDifficulty = normal
@@ -185,7 +183,7 @@ func Gameover() {
 	gos.Level = tl.NewBaseLevel(tl.Cell{
 		Bg: tl.ColorBlack,
 	})
-	logofile, _ := ioutil.ReadFile("util/gameover-logo.txt")
+	logofile, _ := os.ReadFile("util/gameover-logo.txt")
 	gos.Logo = tl.NewEntityFromCanvas(10, 3, tl.CanvasFromString(string(logofile)))
 	gos.Finalstats = []*tl.Text{
 		tl.NewText(10, 13, fmt.Sprintf("Score: %d", gs.Score), tl.ColorWhite, tl.ColorBlack),
@@ -226,27 +224,33 @@ func UpdateFPS() {
 	sp.SpeedText.SetText(fmt.Sprintf("Speed: %.0f", gs.FPS))
 }
 
-// RestartGame will restart the game and reset the position of the food and the snake to prevent collision issues.
+// RestartGame will restart the game and reset all state to prevent stale data
+// from the previous round: snake body, direction, food position, score, and speed.
 func RestartGame() {
 	// Removes the current snake and food from the level.
 	gs.RemoveEntity(gs.SnakeEntity)
 	gs.RemoveEntity(gs.FoodEntity)
 
-	// Generate a new snake and food.
+	// Generate a completely fresh snake (new body, direction=right, default position).
 	gs.SnakeEntity = NewSnake()
+
+	// Reset score and FPS to match the current difficulty setting.
+	gs.Score = 0
+	SetDiffiultyFPS()
+
+	// Generate new food AFTER the new snake is in place, so the food
+	// spawn logic can check against the snake body for overlap.
 	gs.FoodEntity = NewFood()
 
-	// Revert the score and fps to the standard.
-	SetDiffiultyFPS()
-	gs.Score = 0
-
-	// Update the score and fps text.
+	// Update the sidepanel text to reflect the reset values.
 	sp.ScoreText.SetText(fmt.Sprintf("Score: %d", gs.Score))
 	sp.SpeedText.SetText(fmt.Sprintf("Speed: %.0f", gs.FPS))
 
-	// Adds the snake and food back and sets them to the standard position.
+	// Add the new entities back to the level.
 	gs.AddEntity(gs.SnakeEntity)
 	gs.AddEntity(gs.FoodEntity)
+
+	// Apply the reset FPS and switch back to the game screen.
 	sg.Screen().SetFps(gs.FPS)
 	sg.Screen().SetLevel(gs)
 }
@@ -262,19 +266,27 @@ func SetDiffiultyFPS() {
 	}
 }
 
+// SaveHighScore saves the score to HIGHSCORES.md. If the file does not exist,
+// it creates it with a header. Errors are silently ignored to avoid crashing
+// the game on filesystem issues (e.g. missing file, permission denied).
 func SaveHighScore(score int, speed float64, difficulty string) {
-	var newRow []byte
+	const filePath = "HIGHSCORES.md"
 	datetime := time.Now()
-	newRow = []byte(fmt.Sprintf("\n|" + fmt.Sprintf("%s", datetime.Format("01-02-2006 15:04:05")) + "|" + fmt.Sprintf("%d", score) + "|" + fmt.Sprintf("%.0f", speed) + "|" + difficulty + "|  "))
-	f, err := os.OpenFile("HIGHSCORES.md", os.O_APPEND|os.O_WRONLY, 0644)
+	newRow := fmt.Sprintf("\n|%s|%d|%.0f|%s|  ",
+		datetime.Format("01-02-2006 15:04:05"), score, speed, difficulty)
+
+	// Try to open for append; if the file doesn't exist, create it with a header.
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("Error opening file: %s", err)
+		// File likely doesn't exist — create it with a header
+		f, err = os.Create(filePath)
+		if err != nil {
+			// Cannot create file (permissions, read-only fs, etc.) — silently skip
+			return
+		}
+		_, _ = f.WriteString("|Date|Score|Speed|Difficulty|\n|---|---|---|---|")
 	}
+	defer f.Close()
 
-	_, err2 := f.Write(newRow)
-	if err2 != nil {
-		log.Fatalf("Error writing to file: %s", err2)
-	}
-
-	f.Close()
+	_, _ = f.WriteString(newRow)
 }

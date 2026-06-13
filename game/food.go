@@ -7,8 +7,12 @@ import (
 	tl "github.com/JoelOtter/termloop"
 )
 
-// Variable insideborderW and insideborderH are variables consisting of the arenawidth and height and subtract both with 1
-// in order to account for the arena border.
+// rng is a package-level random source, seeded once at init time.
+// This avoids the deprecated rand.Seed() being called on every random operation,
+// which could produce identical seeds when called in rapid succession.
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+// insideborderW and insideborderH define the safe spawn area inside the arena border.
 var insideborderW = 70 - 1
 var insideborderH = 25 - 1
 
@@ -17,25 +21,42 @@ func NewFood() *Food {
 	food := new(Food)
 	// Create a new entity food with a standard position and 1x1 size
 	food.Entity = tl.NewEntity(1, 1, 1, 1)
-	// Call function MoveFood to move the food to a random position.
+	// Call function MoveFood to move the food to a safe random position.
 	food.MoveFood()
 
 	return food
 }
 
-// MoveFood moves the food into a new random position.
+// MoveFood moves the food into a new random position that does not overlap
+// with the snake body or the arena border.
 func (food *Food) MoveFood() {
+	const maxAttempts = 1000
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		NewX := RandomInsideArena(insideborderW, 1)
+		NewY := RandomInsideArena(insideborderH, 1)
+		candidate := Coordinates{NewX, NewY}
 
-	// Calls the RandomInsideArena function to make sure that the foods spawns inside the arena.
-	NewX := RandomInsideArena(insideborderW, 1)
-	NewY := RandomInsideArena(insideborderH, 1)
+		// Skip if position is on the arena border
+		if gs != nil && gs.ArenaEntity != nil && gs.ArenaEntity.Contains(candidate) {
+			continue
+		}
+		// Skip if position is on the snake body
+		if gs != nil && gs.SnakeEntity != nil && gs.SnakeEntity.ContainsCoord(candidate) {
+			continue
+		}
 
-	// Changes the X and Y coordinates of the food.
-	food.Foodposition.X = NewX
-	food.Foodposition.Y = NewY
+		food.Foodposition.X = NewX
+		food.Foodposition.Y = NewY
+		food.Emoji = RandomFood()
+		food.SetPosition(food.Foodposition.X, food.Foodposition.Y)
+		return
+	}
+
+	// Fallback: if we couldn't find a safe position after max attempts,
+	// just place it somewhere (extremely unlikely with normal arena sizes)
+	food.Foodposition.X = RandomInsideArena(insideborderW, 1)
+	food.Foodposition.Y = RandomInsideArena(insideborderH, 1)
 	food.Emoji = RandomFood()
-
-	// Set the new position of the food.
 	food.SetPosition(food.Foodposition.X, food.Foodposition.Y)
 }
 
@@ -57,10 +78,8 @@ func RandomFood() rune {
 		'S', // You do not want to eat the skull
 	}
 
-	rand.Seed(time.Now().UnixNano())
-
 	// Return a random rune picked from the slice
-	return emoji[rand.Intn(len(emoji))]
+	return emoji[rng.Intn(len(emoji))]
 }
 
 // Draw will print out the food on the screen.
@@ -75,8 +94,7 @@ func (food *Food) Contains(c Coordinates) bool {
 	return c.X == food.Foodposition.X && c.Y == food.Foodposition.Y
 }
 
-// RandomInsideArena will the minimal, which is just inside the border and the maximal, being the arena width or height.
+// RandomInsideArena will return a random value between iMin (inclusive) and iMax (exclusive).
 func RandomInsideArena(iMax int, iMin int) int {
-	rand.Seed(time.Now().UnixNano())
-	return rand.Intn(iMax-iMin) + iMin
+	return rng.Intn(iMax-iMin) + iMin
 }

@@ -141,6 +141,16 @@ func (snake *Snake) Draw(screen *tl.Screen) {
 	}
 }
 
+// ContainsCoord checks if the given coordinate is part of the snake body.
+func (snake *Snake) ContainsCoord(c Coordinates) bool {
+	for _, seg := range snake.Bodylength {
+		if seg == c {
+			return true
+		}
+	}
+	return false
+}
+
 // Contains checks if the snake contains the head of the snake, if so it will return true.
 func (snake *Snake) Contains() bool {
 	// This for loop will check if the head is in any part of the body.
