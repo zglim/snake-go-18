@@ -8,6 +8,8 @@ var sp *Sidepanel
 var gs *Gamescreen
 var ts *Titlescreen
 var gop *Gameoptionsscreen
+var gos *Gameoverscreen
+var hs *Highscorescreen
 
 // Own created types.
 type direction int
@@ -50,6 +52,19 @@ type Gameoverscreen struct {
 	Finalstats        []*tl.Text
 	OptionsBackground *tl.Rectangle
 	OptionsText       []*tl.Text
+	SaveStatusText    *tl.Text
+	ScoreWasSaved     bool
+}
+
+type Highscorescreen struct {
+	tl.Level
+	FromGameOver   bool
+	ScoreWasSaved  bool
+	Texts          []*tl.Text
+	Entries        []HighScoreEntry
+	CurrentScore   int
+	CurrentSpeed   float64
+	CurrentDiff    string
 }
 
 type Gameoptionsscreen struct {

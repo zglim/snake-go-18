@@ -60,7 +60,18 @@ func (gos *Gameoverscreen) Tick(event tl.Event) {
 			// Will end the game using a fatal log. This uses the termbox package as termloop does not have a function like that.
 			tb.Close()
 		case tl.KeySpace:
-			SaveHighScore(gs.Score, gs.FPS, Difficulty)
+			err := SaveHighScore(gs.Score, gs.FPS, Difficulty)
+			if err == nil {
+				gos.SaveStatusText.SetText("Score saved!")
+				gos.ScoreWasSaved = true
+			} else {
+				gos.SaveStatusText.SetText("Error saving score!")
+			}
+		}
+		// Handle 'H' key to view high scores from game over screen
+		if event.Ch == 'h' || event.Ch == 'H' {
+			hs := NewHighScoresScreen(true, gos.ScoreWasSaved)
+			sg.Screen().SetLevel(hs)
 		}
 	}
 }
@@ -76,6 +87,11 @@ func (ts *Titlescreen) Tick(event tl.Event) {
 		if event.Key == tl.KeyInsert {
 			gop := NewOptionsscreen()
 			sg.Screen().SetLevel(gop)
+		}
+		// Handle 'H' key to view high scores from title screen
+		if event.Ch == 'h' || event.Ch == 'H' {
+			hs := NewHighScoresScreen(false, false)
+			sg.Screen().SetLevel(hs)
 		}
 	}
 }
@@ -171,5 +187,18 @@ func CheckSelectedColor(c int) tl.Attr {
 		return tl.ColorCyan
 	default:
 		return tl.ColorDefault
+	}
+}
+
+// Tick listens for ESC to navigate back from the high scores screen.
+func (hs *Highscorescreen) Tick(event tl.Event) {
+	if event.Type == tl.EventKey {
+		if event.Key == tl.KeyEsc {
+			if hs.FromGameOver && gos != nil {
+				sg.Screen().SetLevel(gos)
+			} else {
+				sg.Screen().SetLevel(ts)
+			}
+		}
 	}
 }

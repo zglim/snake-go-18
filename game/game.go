@@ -3,9 +3,6 @@ package trisnake
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
-	"os"
-	"time"
 
 	tl "github.com/JoelOtter/termloop"
 )
@@ -47,6 +44,7 @@ func NewTitleScreen() *Titlescreen {
 	ts.OptionsText = []*tl.Text{
 		tl.NewText(10, 15, "Press ENTER to start!", tl.ColorWhite, tl.ColorBlack),
 		tl.NewText(10, 17, "Press INSERT for options!", tl.ColorWhite, tl.ColorBlack),
+		tl.NewText(10, 19, "Press H for high scores!", tl.ColorWhite, tl.ColorBlack),
 	}
 
 	return ts
@@ -181,7 +179,7 @@ func NewSidepanel() *Sidepanel {
 
 func Gameover() {
 	// Create a new gameover screen and its content.
-	gos := new(Gameoverscreen)
+	gos = new(Gameoverscreen)
 	gos.Level = tl.NewBaseLevel(tl.Cell{
 		Bg: tl.ColorBlack,
 	})
@@ -192,12 +190,14 @@ func Gameover() {
 		tl.NewText(10, 15, fmt.Sprintf("Speed: %.0f", gs.FPS), tl.ColorWhite, tl.ColorBlack),
 		tl.NewText(10, 17, fmt.Sprintf("Difficulty: %s", Difficulty), tl.ColorWhite, tl.ColorBlack),
 	}
-	gos.OptionsBackground = tl.NewRectangle(45, 12, 45, 7, tl.ColorWhite)
+	gos.OptionsBackground = tl.NewRectangle(45, 12, 45, 9, tl.ColorWhite)
 	gos.OptionsText = []*tl.Text{
 		tl.NewText(47, 13, "Press \"Home\" to restart!", tl.ColorBlack, tl.ColorWhite),
 		tl.NewText(47, 15, "Press \"Delete\" to quit!", tl.ColorBlack, tl.ColorWhite),
 		tl.NewText(47, 17, "Press \"Spacebar\" to save your score!", tl.ColorBlack, tl.ColorWhite),
+		tl.NewText(47, 19, "Press \"H\" for high scores!", tl.ColorBlack, tl.ColorWhite),
 	}
+	gos.SaveStatusText = tl.NewText(10, 20, "", tl.ColorGreen, tl.ColorBlack)
 
 	// Add all of the entities to the screen
 	for _, v := range gos.Finalstats {
@@ -205,6 +205,7 @@ func Gameover() {
 	}
 	gos.AddEntity(gos.Logo)
 	gos.AddEntity(gos.OptionsBackground)
+	gos.AddEntity(gos.SaveStatusText)
 
 	for _, vv := range gos.OptionsText {
 		gos.AddEntity(vv)
@@ -262,19 +263,126 @@ func SetDiffiultyFPS() {
 	}
 }
 
-func SaveHighScore(score int, speed float64, difficulty string) {
-	var newRow []byte
-	datetime := time.Now()
-	newRow = []byte(fmt.Sprintf("\n|" + fmt.Sprintf("%s", datetime.Format("01-02-2006 15:04:05")) + "|" + fmt.Sprintf("%d", score) + "|" + fmt.Sprintf("%.0f", speed) + "|" + difficulty + "|  "))
-	f, err := os.OpenFile("HIGHSCORES.md", os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatalf("Error opening file: %s", err)
+// NewHighScoresScreen creates and displays the high scores screen.
+// fromGameOver indicates whether the user navigated here from the game over screen.
+// scoreWasSaved indicates whether the current game's score was just saved.
+func NewHighScoresScreen(fromGameOver bool, scoreWasSaved bool) *Highscorescreen {
+	hs = new(Highscorescreen)
+	hs.Level = tl.NewBaseLevel(tl.Cell{
+		Bg: tl.ColorBlack,
+	})
+	hs.FromGameOver = fromGameOver
+	hs.ScoreWasSaved = scoreWasSaved
+
+	// Title
+	hs.Texts = append(hs.Texts,
+		tl.NewText(10, 1, "HIGH SCORES", tl.ColorCyan, tl.ColorBlack),
+	)
+
+	// Load scores from file
+	entries := LoadHighScores()
+	hs.Entries = entries
+
+	// Get current game stats if available
+	if gs != nil {
+		hs.CurrentScore = gs.Score
+		hs.CurrentSpeed = gs.FPS
+		hs.CurrentDiff = Difficulty
 	}
 
-	_, err2 := f.Write(newRow)
-	if err2 != nil {
-		log.Fatalf("Error writing to file: %s", err2)
+	// Table header
+	y := 4
+	hs.Texts = append(hs.Texts,
+		tl.NewText(5, y, " #  Date                Score  Speed  Difficulty", tl.ColorWhite, tl.ColorBlack),
+	)
+	y++
+	hs.Texts = append(hs.Texts,
+		tl.NewText(5, y, "--- ------------------- ----- ----- ----------", tl.ColorWhite, tl.ColorBlack),
+	)
+	y++
+
+	maxDisplay := 10
+	if len(entries) > maxDisplay {
+		maxDisplay = len(entries)
+	}
+	if maxDisplay > 15 {
+		maxDisplay = 15
 	}
 
-	f.Close()
+	// Current game score marker
+	currentScoreInserted := false
+
+	for i := 0; i < maxDisplay; i++ {
+		if i >= len(entries) {
+			break
+		}
+		e := entries[i]
+		rank := i + 1
+		line := fmt.Sprintf("%2d  %-19s %5d %5.0f  %-10s",
+			rank, e.Date, e.Score, e.Speed, e.Difficulty)
+
+		// Highlight if this matches the current game's score (and not yet inserted)
+		color := tl.ColorWhite
+		if !currentScoreInserted && gs != nil &&
+			e.Score == hs.CurrentScore &&
+			e.Speed == hs.CurrentSpeed &&
+			e.Difficulty == hs.CurrentDiff {
+			color = tl.ColorGreen
+			currentScoreInserted = true
+		}
+
+		hs.Texts = append(hs.Texts, tl.NewText(5, y, line, color, tl.ColorBlack))
+		y++
+	}
+
+	// If current game's score is not in the list, show it at the bottom
+	if !currentScoreInserted && gs != nil && hs.CurrentScore > 0 {
+		y++
+		hs.Texts = append(hs.Texts,
+			tl.NewText(5, y, "Current game:", tl.ColorYellow, tl.ColorBlack),
+		)
+		y++
+		currentLine := fmt.Sprintf("    %-19s %5d %5.0f  %-10s",
+			"(not saved)", hs.CurrentScore, hs.CurrentSpeed, hs.CurrentDiff)
+		hs.Texts = append(hs.Texts,
+			tl.NewText(5, y, currentLine, tl.ColorYellow, tl.ColorBlack),
+		)
+		y++
+	}
+
+	if len(entries) == 0 {
+		y++
+		hs.Texts = append(hs.Texts,
+			tl.NewText(5, y, "No high scores yet. Play a game and save your score!", tl.ColorWhite, tl.ColorBlack),
+		)
+		y++
+	}
+
+	// Save status message
+	y += 2
+	if scoreWasSaved {
+		hs.Texts = append(hs.Texts,
+			tl.NewText(5, y, "Score saved!", tl.ColorGreen, tl.ColorBlack),
+		)
+		y++
+	}
+
+	// Navigation instructions
+	y += 1
+	if fromGameOver {
+		hs.Texts = append(hs.Texts,
+			tl.NewText(5, y, "Press ESC to go back to Game Over", tl.ColorWhite, tl.ColorBlack),
+		)
+	} else {
+		hs.Texts = append(hs.Texts,
+			tl.NewText(5, y, "Press ESC to go back to Title", tl.ColorWhite, tl.ColorBlack),
+		)
+	}
+
+	// Add all text entities to the level
+	for _, t := range hs.Texts {
+		hs.AddEntity(t)
+	}
+
+	return hs
 }
